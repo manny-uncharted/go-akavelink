@@ -1,0 +1,8 @@
+# Golang
+/bin/
+/vendor/
+/*.log
+*.test
+*.out
+*.exe
+.DS_Store
