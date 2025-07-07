@@ -60,8 +60,6 @@ func MainFunc() {
 	}
 
 	// 3. Register the handlers.
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", srv.healthHandler)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", srv.healthHandler)
@@ -83,10 +81,9 @@ func main() {
 }
 
 
-// healthHandler is a method on the server.
+
 // uploadHandler is updated to get the bucket name from the path value.
 func (s *server) uploadHandler(w http.ResponseWriter, r *http.Request) {
-	// --- NEW: Get bucketName from the URL path ---
 	bucketName := r.PathValue("bucketName")
 
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
@@ -137,7 +134,6 @@ func (s *server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 // downloadHandler is updated to get parameters from the path value.
 func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request) {
-	// --- NEW: Get parameters directly from the URL path ---
 	bucketName := r.PathValue("bucketName")
 	fileName := r.PathValue("fileName")
 
@@ -156,6 +152,8 @@ func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Successfully downloaded: %s/%s", bucketName, fileName)
 }
 
+// healthHandler is a method on the server.
 func (s *server) healthHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "ok")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ok"))
 }
