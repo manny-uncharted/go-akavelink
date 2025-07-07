@@ -7,6 +7,7 @@ import (
 	"os"
 
 	akavesdk "github.com/akave-ai/go-akavelink/internal/sdk" // aliased for clarity
+	"github.com/joho/godotenv"                               // Import godotenv
 )
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
@@ -20,6 +21,13 @@ type server struct {
 }
 
 func main() {
+	// Load environment variables from .env file
+	err := godotenv.Load()
+	if err != nil {
+		log.Printf("Warning: No .env file found or could not be loaded: %v. Relying on system environment variables.", err)
+		// It's a warning, not a fatal error, because variables might be set directly in the environment.
+	}
+
 	// 0. Read the private key from the environment variable.
 	privateKey := os.Getenv("AKAVE_PRIVATE_KEY")
 	if privateKey == "" {
