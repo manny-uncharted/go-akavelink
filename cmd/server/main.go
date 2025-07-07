@@ -1,5 +1,6 @@
 // cmd/server/main.go
-package main // Keep this as 'main' for the executable entry point
+// cmd/server/main.go
+package main // Keep this as 'main' for the executable entry point // Keep this as 'main' for the executable entry point
 
 import (
 	"log"
@@ -76,8 +77,10 @@ func main() {
 	MainFunc()
 }
 
+
 // healthHandler is a method on the server.
 func (s *server) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
 }
+
