@@ -1,5 +1,5 @@
 // cmd/server/main.go
-package main
+package main // Keep this as 'main' for the executable entry point
 
 import (
 	"log"
@@ -15,7 +15,9 @@ type server struct {
 	client *akavesdk.Client
 }
 
-func main() {
+// MainFunc contains the core logic of your application,
+// making it testable by allowing external calls.
+func MainFunc() {
 	// Load environment variables using the reusable function
 	utils.LoadEnvConfig()
 
@@ -57,12 +59,17 @@ func main() {
 	}
 
 	// 3. Register the handlers.
-	http.HandleFunc("/health", srv.healthHandler)
+	http.HandleFunc("/health", srv.healthHandler) // This now correctly uses the method
 
 	log.Println("Starting go-akavelink server on :8080...")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
+}
+
+// The actual main entry point for the executable.
+func main() {
+	MainFunc()
 }
 
 // healthHandler is a method on the server.
