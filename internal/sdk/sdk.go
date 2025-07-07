@@ -18,7 +18,7 @@ var IPCClient *sdk.IPC
 // This function should be called once at the start of your application.
 // Exported (capitalized) to be callable from the 'main' package.
 func InitAkaveSDK() error { // <-- Capitalized 'I'
-	akaveNodeAddress := "localhost:50051"
+	akaveNodeAddress := "connect.akave.ai:5500"
 	maxConcurrency := 10
 	blockPartSize := int64(1024 * 1024)
 	useConnectionPool := true
