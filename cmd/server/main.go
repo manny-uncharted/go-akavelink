@@ -9,7 +9,6 @@ import (
 	akavesdk "github.com/akave-ai/go-akavelink/internal/sdk"
 	"github.com/akave-ai/go-akavelink/internal/utils" // Import your new utils package
 )
-
 // server holds the application's dependencies, like our Akave client.
 type server struct {
 	client *akavesdk.Client
@@ -72,8 +71,10 @@ func main() {
 	MainFunc()
 }
 
+
 // healthHandler is a method on the server.
 func (s *server) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
 }
+
