@@ -2,7 +2,11 @@ module github.com/akave-ai/go-akavelink
 
 go 1.23.5
 
-require github.com/akave-ai/akavesdk v0.2.0
+require (
+	github.com/akave-ai/akavesdk v0.2.0
+	github.com/joho/godotenv v1.5.1
+	github.com/stretchr/testify v1.10.0
+)
 
 require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
@@ -13,6 +17,7 @@ require (
 	github.com/consensys/gnark-crypto v0.12.1 // indirect
 	github.com/crackcomm/go-gitignore v0.0.0-20231225121904-e25f5bc08668 // indirect
 	github.com/crate-crypto/go-kzg-4844 v1.0.0 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
 	github.com/ethereum/c-kzg-4844 v1.0.0 // indirect
@@ -66,6 +71,7 @@ require (
 	github.com/multiformats/go-multihash v0.2.3 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/polydawn/refmt v0.89.0 // indirect
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
 	github.com/spacemonkeygo/monkit/v3 v3.0.23 // indirect
@@ -92,6 +98,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250324211829-b45e905df463 // indirect
 	google.golang.org/grpc v1.73.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.3.0 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
