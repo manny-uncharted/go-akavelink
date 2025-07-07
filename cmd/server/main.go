@@ -1,5 +1,6 @@
 // cmd/server/main.go
-package main // Keep this as 'main' for the executable entry point
+// cmd/server/main.go
+package main // Keep this as 'main' for the executable entry point // Keep this as 'main' for the executable entry point
 
 import (
 	"log"
@@ -11,6 +12,8 @@ import (
 	akavesdk "github.com/akave-ai/go-akavelink/internal/sdk"
 	"github.com/akave-ai/go-akavelink/internal/utils" // Import your new utils package
 )
+
+
 // server holds the application's dependencies, like our Akave client.
 type server struct {
 	client *akavesdk.Client

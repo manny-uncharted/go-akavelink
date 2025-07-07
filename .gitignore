@@ -8,5 +8,6 @@
 .DS_Store
 NOTES
 .env
+.env
 test.txt
 *.txt
