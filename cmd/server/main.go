@@ -13,6 +13,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, "ok")
 }
 
+
 // server holds the application's dependencies, like our Akave client.
 // This makes it easy to pass dependencies to our handlers.
 type server struct {
@@ -66,8 +67,3 @@ func (s *server) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
-// healthHandler is now a method on the server.
-func (s *server) healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ok"))
-}
