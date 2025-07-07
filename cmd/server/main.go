@@ -1,5 +1,6 @@
 // cmd/server/main.go
-package main // Keep this as 'main' for the executable entry point
+// cmd/server/main.go
+package main // Keep this as 'main' for the executable entry point // Keep this as 'main' for the executable entry point
 
 import (
 	"log"
