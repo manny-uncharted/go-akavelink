@@ -60,12 +60,15 @@ func MainFunc() {
 	}
 
 	// 3. Register the handlers.
-	http.HandleFunc("/health", srv.healthHandler) // This now correctly uses the method
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", srv.healthHandler)
+
 
 	log.Println("Starting go-akavelink server on :8080...")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
+
 }
 
 // The actual main entry point for the executable.
