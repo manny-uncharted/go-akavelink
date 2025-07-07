@@ -1,38 +1,37 @@
-package main
+// cmd/server/main.go
+package main // Keep this as 'main' for the executable entry point
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"encoding/json"
 	"os"
 
 
-	akavesdk "github.com/akave-ai/go-akavelink/internal/sdk" // aliased for clarity
-	
+	akavesdk "github.com/akave-ai/go-akavelink/internal/sdk"
+	"github.com/akave-ai/go-akavelink/internal/utils" // Import your new utils package
 )
-
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "ok")
-}
-
-
 // server holds the application's dependencies, like our Akave client.
-// This makes it easy to pass dependencies to our handlers.
 type server struct {
 	client *akavesdk.Client
 }
 
-func main() {
+// MainFunc contains the core logic of your application,
+// making it testable by allowing external calls.
+func MainFunc() {
+	// Load environment variables using the reusable function
+	utils.LoadEnvConfig()
+
 	// 0. Read the private key from the environment variable.
 	privateKey := os.Getenv("AKAVE_PRIVATE_KEY")
 	if privateKey == "" {
-		log.Fatal("FATAL: AKAVE_PRIVATE_KEY environment variable not set.")
+		log.Fatal("FATAL: AKAVE_PRIVATE_KEY environment variable not set. This is required.")
 	}
 	nodeAddress := os.Getenv("AKAVE_NODE_ADDRESS")
 	if nodeAddress == "" {
-		log.Fatal("FATAL: AKAVE_NODE_ADDRESS environment variable not set.")
+		log.Fatal("FATAL: AKAVE_NODE_ADDRESS environment variable not set. This is required.")
 	}
+
 	// 1. Configure and initialize our Akave client wrapper.
 	cfg := akavesdk.Config{
 		NodeAddress:       nodeAddress,
@@ -46,13 +45,23 @@ func main() {
 	if err != nil {
 		log.Fatalf("Fatal error initializing Akave client: %v", err)
 	}
-	// Ensure the connection is closed when the application exits.
-	defer client.Close()
+	defer func() {
+		log.Println("Closing Akave SDK connection...")
+		if closeErr := client.Close(); closeErr != nil {
+			log.Printf("Error closing Akave SDK connection: %v", closeErr)
+		} else {
+			log.Println("Akave SDK connection closed successfully.")
+		}
+	}()
 
 	// 2. Create a new server instance with the initialized client.
 	srv := &server{
 		client: client,
 	}
+
+	// 3. Register the handlers.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", srv.healthHandler)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", srv.healthHandler)
@@ -65,8 +74,16 @@ func main() {
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
+
 }
 
+// The actual main entry point for the executable.
+func main() {
+	MainFunc()
+}
+
+
+// healthHandler is a method on the server.
 // uploadHandler is updated to get the bucket name from the path value.
 func (s *server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	// --- NEW: Get bucketName from the URL path ---
