@@ -1,3 +1,5 @@
+// Package sdk provides a high-level client for interacting with the AkaveLink IPC API.
+// It encapsulates bucket and file operations and manages the underlying SDK connection.
 package sdk
 
 import (
@@ -6,58 +8,63 @@ import (
 	"github.com/akave-ai/akavesdk/sdk"
 )
 
+// Config defines parameters for initializing the IPC client.
 type Config struct {
+	// NodeAddress is the gRPC endpoint for the AkaveLink node, e.g., "localhost:9090".
 	NodeAddress       string
+	// MaxConcurrency controls parallelism for upload/download streams.
 	MaxConcurrency    int
+	// BlockPartSize specifies the size of each chunk in bytes.
 	BlockPartSize     int64
+	// UseConnectionPool toggles the SDK's connection pool.
 	UseConnectionPool bool
+	// PrivateKeyHex is the hex-encoded private key used for signing transactions.
 	PrivateKeyHex     string
 }
 
+// Client wraps the AkaveLink IPC API and manages its SDK lifecycle.
 type Client struct {
 	*sdk.IPC
-	sdk *sdk.SDK
+	core *sdk.SDK
 }
 
+// NewClient initializes the AkaveLink SDK and returns a configured IPC client.
+// It returns an error if the private key is missing or the SDK cannot initialize.
 func NewClient(cfg Config) (*Client, error) {
-	// Add a check to ensure the private key is provided.
 	if cfg.PrivateKeyHex == "" {
-		return nil, fmt.Errorf("private key is required for IPC client but was not provided")
+		return nil, fmt.Errorf("configuration error: missing PrivateKeyHex")
 	}
 
-	sdkOpts := []sdk.Option{
+	opts := []sdk.Option{
 		sdk.WithPrivateKey(cfg.PrivateKeyHex),
 	}
 
-	// Initialize the main Akave SDK with the base config AND our new options.
-	newSDK, err := sdk.New(
+	core, err := sdk.New(
 		cfg.NodeAddress,
 		cfg.MaxConcurrency,
 		cfg.BlockPartSize,
 		cfg.UseConnectionPool,
-		sdkOpts...,
+		opts..., 
 	)
 	if err != nil {
-		// If New() fails, it's likely due to an invalid key or other config.
-		return nil, fmt.Errorf("failed to initialize Akave SDK: %w", err)
+		return nil, fmt.Errorf("SDK initialization failed: %w", err)
 	}
 
-	// Now, this call will succeed because newSDK already holds the private key.
-	ipc, err := newSDK.IPC()
+	ipcClient, err := core.IPC()
 	if err != nil {
-		newSDK.Close()
-		return nil, fmt.Errorf("failed to get IPC client from Akave SDK: %w", err)
+		core.Close()
+		return nil, fmt.Errorf("failed to obtain IPC interface: %w", err)
 	}
 
-	return &Client{
-		IPC: ipc,
-		sdk: newSDK,
-	}, nil
+	return &Client{IPC: ipcClient, core: core}, nil
 }
 
-// Close gracefully shuts down the connection to the Akave SDK.
-// It's important to call this on application shutdown to release resources.
+// NewIPC returns a fresh IPC interface instance with an updated transaction nonce.
+func (c *Client) NewIPC() (*sdk.IPC, error) {
+	return c.core.IPC()
+}
+
+// Close terminates all underlying SDK connections.
 func (c *Client) Close() error {
-	fmt.Println("Closing Akave SDK connection...")
-	return c.sdk.Close()
+	return c.core.Close()
 }

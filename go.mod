@@ -4,6 +4,7 @@ go 1.23.5
 
 require (
 	github.com/akave-ai/akavesdk v0.2.0
+	github.com/gorilla/mux v1.8.1
 	github.com/joho/godotenv v1.5.1
 	github.com/stretchr/testify v1.10.0
 )
