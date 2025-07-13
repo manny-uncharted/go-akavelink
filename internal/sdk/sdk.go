@@ -1,11 +1,16 @@
+// internal/sdk/sdk.go
+
 package sdk
 
 import (
+	"context"
 	"fmt"
+	"io"
 
 	"github.com/akave-ai/akavesdk/sdk"
 )
 
+// Config holds configuration for the Akave SDK client.
 type Config struct {
 	NodeAddress       string
 	MaxConcurrency    int
@@ -14,13 +19,14 @@ type Config struct {
 	PrivateKeyHex     string
 }
 
+// Client wraps the official Akave SDK's IPC interface and core instance.
 type Client struct {
 	*sdk.IPC
 	sdk *sdk.SDK
 }
 
+// NewClient constructs and returns a Client using the provided Config.
 func NewClient(cfg Config) (*Client, error) {
-	// Add a check to ensure the private key is provided.
 	if cfg.PrivateKeyHex == "" {
 		return nil, fmt.Errorf("private key is required for IPC client but was not provided")
 	}
@@ -29,8 +35,7 @@ func NewClient(cfg Config) (*Client, error) {
 		sdk.WithPrivateKey(cfg.PrivateKeyHex),
 	}
 
-	// Initialize the main Akave SDK with the base config AND our new options.
-	newSDK, err := sdk.New(
+	core, err := sdk.New(
 		cfg.NodeAddress,
 		cfg.MaxConcurrency,
 		cfg.BlockPartSize,
@@ -38,26 +43,83 @@ func NewClient(cfg Config) (*Client, error) {
 		sdkOpts...,
 	)
 	if err != nil {
-		// If New() fails, it's likely due to an invalid key or other config.
 		return nil, fmt.Errorf("failed to initialize Akave SDK: %w", err)
 	}
 
-	// Now, this call will succeed because newSDK already holds the private key.
-	ipc, err := newSDK.IPC()
+	ipc, err := core.IPC()
 	if err != nil {
-		newSDK.Close()
+		core.Close()
 		return nil, fmt.Errorf("failed to get IPC client from Akave SDK: %w", err)
 	}
 
-	return &Client{
-		IPC: ipc,
-		sdk: newSDK,
-	}, nil
+	return &Client{IPC: ipc, sdk: core}, nil
 }
 
-// Close gracefully shuts down the connection to the Akave SDK.
-// It's important to call this on application shutdown to release resources.
+// This is useful for getting a fresh instance with an updated transaction nonce.
+func (c *Client) NewIPC() (*sdk.IPC, error) {
+	return c.sdk.IPC()
+}
+
+// Close gracefully shuts down the underlying SDK connection.
 func (c *Client) Close() error {
-	fmt.Println("Closing Akave SDK connection...")
 	return c.sdk.Close()
+}
+
+// DeleteBucket removes an entire bucket and all its contents.
+func (c *Client) DeleteBucket(ctx context.Context, bucketName string) error {
+	return c.IPC.DeleteBucket(ctx, bucketName)
+}
+
+// ListFiles returns metadata for all files in a given bucket.
+func (c *Client) ListFiles(ctx context.Context, bucketName string) ([]sdk.IPCFileListItem, error) {
+    return c.IPC.ListFiles(ctx, bucketName)
+}
+
+// CreateBucket provisions a new bucket under the caller’s key.
+func (c *Client) CreateBucket(ctx context.Context, bucketName string) error {
+	// call through to the IPC layer
+	if _, err := c.IPC.CreateBucket(ctx, bucketName); err != nil {
+		return fmt.Errorf("failed to create bucket %q: %w", bucketName, err)
+	}
+	return nil
+}
+
+// ListBuckets returns the names of all buckets accessible to this client.
+func (c *Client) ListBuckets() ([]string, error) {
+	buckets, err := c.IPC.ListBuckets(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to list buckets: %w", err)
+	}
+
+	names := make([]string, len(buckets))
+	for i, b := range buckets {
+		names[i] = b.Name
+	}
+	return names, nil
+}
+
+
+// CreateFileUpload opens a new upload session for the given bucket and file name.
+func (c *Client) CreateFileUpload(ctx context.Context, bucket, fileName string) (*sdk.IPCFileUpload, error) {
+	return c.IPC.CreateFileUpload(ctx, bucket, fileName)
+}
+
+// Upload streams the given reader into the established upload session.
+func (c *Client) Upload(ctx context.Context, upload *sdk.IPCFileUpload, reader io.Reader) (sdk.IPCFileMetaV2, error) {
+	return c.IPC.Upload(ctx, upload, reader)
+}
+
+// CreateFileDownload opens a download session for the specified bucket and file.
+func (c *Client) CreateFileDownload(ctx context.Context, bucket, fileName string) (sdk.IPCFileDownload, error) {
+	return c.IPC.CreateFileDownload(ctx, bucket, fileName)
+}
+
+// Download writes the content of the download session to the provided writer.
+func (c *Client) Download(ctx context.Context, download sdk.IPCFileDownload, writer io.Writer) error {
+	return c.IPC.Download(ctx, download, writer)
+}
+
+// FileDelete removes a file from a bucket.
+func (c *Client) FileDelete(ctx context.Context, bucket, fileName string) error {
+	return c.IPC.FileDelete(ctx, bucket, fileName)
 }
