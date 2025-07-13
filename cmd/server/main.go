@@ -1,5 +1,6 @@
-// cmd/server/main.go
-
+// Package cmd provides the HTTP server that manages AkaveLink buckets and files.
+//
+// It exposes RESTful endpoints for health checks, bucket management, and file operations.
 package main
 
 import (
@@ -7,24 +8,27 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"time"
+	"github.com/gorilla/mux"
 
 	akavesdk "github.com/akave-ai/go-akavelink/internal/sdk"
 	"github.com/akave-ai/go-akavelink/internal/utils"
 )
 
-// AkaveResponse is our JSON envelope.
+// AkaveResponse defines the standard JSON response envelope.
 type AkaveResponse struct {
 	Success bool        `json:"success"`
 	Data    interface{} `json:"data,omitempty"`
 	Error   string      `json:"error,omitempty"`
 }
 
+// server encapsulates dependencies for HTTP handlers.
 type server struct {
 	client *akavesdk.Client
 }
 
+
+// healthHandler responds with a simple status OK message.
 func (s *server) healthHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -41,10 +45,14 @@ func (s *server) deleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bucketName := r.PathValue("bucketName")
+	vars := mux.Vars(r)
+	if _, ok := vars["bucketName"]; !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, "bucketName is required")
+		return
+	}
+	bucketName := vars["bucketName"]
 	ctx := r.Context()
 
-	// First, list all files in the bucket.
 	log.Printf("Listing files in bucket '%s' to clear it.", bucketName)
 	files, err := s.client.ListFiles(ctx, bucketName)
 	if err != nil {
@@ -52,7 +60,6 @@ func (s *server) deleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Loop through and delete each file.
 	log.Printf("Found %d files to delete.", len(files))
 	for _, file := range files {
 		ipc, err := s.client.NewIPC()
@@ -66,12 +73,10 @@ func (s *server) deleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 			s.writeErrorResponse(w, http.StatusInternalServerError, "Failed to delete file '"+file.Name+"': "+err.Error())
 			return
 		}
-		// Extend the pause to 1 second to allow the network to process the transaction.
 		time.Sleep(1 * time.Second)
 	}
 	log.Printf("All files in bucket '%s' have been deleted.", bucketName)
 
-	// Finally, delete the now-empty bucket.
 	log.Printf("Deleting empty bucket: %s", bucketName)
 	if err := s.client.DeleteBucket(ctx, bucketName); err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "Failed to delete empty bucket: "+err.Error())
@@ -85,14 +90,80 @@ func (s *server) deleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 
-// listFilesHandler returns a list of all files within a specific bucket.
+// createBucketHandler provisions a new bucket.
+func (s *server) createBucketHandler(w http.ResponseWriter, r *http.Request) {
+    if r.Method != http.MethodPost {
+        s.writeErrorResponse(w, http.StatusMethodNotAllowed, "method not allowed")
+        return
+    }
+
+	vars := mux.Vars(r)
+	if _, ok := vars["bucketName"]; !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, "bucketName is required")
+		return
+	}
+	bucketName := vars["bucketName"]
+	ctx := r.Context()
+
+    log.Printf("Attempting to create bucket: %s", bucketName)
+    if err := s.client.CreateBucket(ctx, bucketName); err != nil {
+        log.Printf("Error: Failed to create bucket: %v", err)
+        s.writeErrorResponse(w, http.StatusInternalServerError, "Failed to create bucket: "+err.Error())
+        return
+    }
+
+    log.Printf("Successfully created bucket: %s", bucketName)
+    s.writeSuccessResponse(w, http.StatusCreated, map[string]string{
+        "message":    "Bucket created successfully",
+        "bucketName": bucketName,
+    })
+}
+
+
+// fileInfoHandler returns metadata for a given file.
+func (s *server) fileInfoHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.writeErrorResponse(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	vars := mux.Vars(r)
+	if _, ok := vars["bucketName"]; !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, "bucketName is required")
+		return
+	}
+	if _, ok := vars["fileName"]; !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, "fileName is required")
+		return
+	}
+
+	bucketName := vars["bucketName"]
+	fileName := vars["fileName"]
+	ctx := r.Context()
+
+	log.Printf("Getting info for file: %s/%s", bucketName, fileName)
+	fileInfo, err := s.client.FileInfo(ctx, bucketName, fileName)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "Failed to retrieve file info: "+err.Error())
+		return
+	}
+
+	s.writeSuccessResponse(w, http.StatusOK, fileInfo)
+}
+
+
+// listFilesHandler returns all files in the specified bucket.
 func (s *server) listFilesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		s.writeErrorResponse(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	bucketName := r.PathValue("bucketName")
+	vars := mux.Vars(r)
+	if _, ok := vars["bucketName"]; !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, "bucketName is required")
+		return
+	}
+	bucketName := vars["bucketName"]
 	ctx := r.Context()
 
 	log.Printf("Fetching files for bucket: %s", bucketName)
@@ -108,8 +179,8 @@ func (s *server) listFilesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 
-
-func (s *server) bucketsHandler(w http.ResponseWriter, r *http.Request) {
+// viewBucketHandler lists all buckets accessible to the client.
+func (s *server) viewBucketHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -125,10 +196,20 @@ func (s *server) bucketsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(AkaveResponse{Success: true, Data: buckets})
 }
 
-// uploadHandler processes multipart file uploads, handling overwrites via a query parameter.
+// uploadHandler receives a multipart file and uploads it.
 func (s *server) uploadHandler(w http.ResponseWriter, r *http.Request) {
-	bucketName := r.PathValue("bucketName")
-	overwrite := r.URL.Query().Get("overwrite") == "true"
+
+	vars := mux.Vars(r)
+	if _, ok := vars["bucketName"]; !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, "bucketName is required")
+		return
+	}
+
+	bucketName := vars["bucketName"]
+	if bucketName == "" {
+		s.writeErrorResponse(w, http.StatusBadRequest, "bucketName cannot be empty")
+		return
+	}
 
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		s.writeErrorResponse(w, http.StatusBadRequest, "Failed to parse multipart form: "+err.Error())
@@ -137,7 +218,7 @@ func (s *server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	file, handler, err := r.FormFile("file")
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "Failed to retrieve file from form")
+		s.writeErrorResponse(w, http.StatusBadRequest, "Failed to retrieve file from form: "+err.Error())
 		return
 	}
 	defer file.Close()
@@ -145,44 +226,56 @@ func (s *server) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	fileName := handler.Filename
 
-	if overwrite {
-		log.Printf("Overwrite flag set. Attempting to delete existing file: %s/%s", bucketName, fileName)
-		if err := s.client.FileDelete(ctx, bucketName, fileName); err != nil {
-			log.Printf("Error: Failed to delete existing file during overwrite: %v", err)
-			s.writeErrorResponse(w, http.StatusInternalServerError, "Failed to delete existing file: "+err.Error())
-			return
-		}
-		log.Printf("Successfully deleted existing file for overwrite.")
-	}
-
 	log.Printf("Initiating upload for '%s' to bucket '%s'", fileName, bucketName)
 	fileUpload, err := s.client.CreateFileUpload(ctx, bucketName, fileName)
 	if err != nil {
-		// Specifically check for the FileAlreadyExists error to provide a helpful response.
-		if strings.Contains(err.Error(), "FileAlreadyExists") {
-			msg := "File already exists. To overwrite, add the '?overwrite=true' query parameter."
-			s.writeErrorResponse(w, http.StatusConflict, msg)
-			return
-		}
-		s.writeErrorResponse(w, http.StatusInternalServerError, "Failed to create file upload stream: "+err.Error())
+		log.Printf("Error creating file upload stream: %v", err)
+		s.writeErrorResponse(w, http.StatusInternalServerError, "Failed to create file upload stream")
 		return
 	}
 
 	log.Printf("Uploading content for file: %s", fileName)
 	finalMetadata, err := s.client.Upload(ctx, fileUpload, file)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "Failed to upload file content: "+err.Error())
+		log.Printf("Error uploading file content: %v", err)
+		s.writeErrorResponse(w, http.StatusInternalServerError, "Failed to upload file content")
 		return
 	}
 
-	s.writeSuccessResponse(w, http.StatusCreated, finalMetadata)
+	response := AkaveResponse{
+		Success: true,
+		Data: map[string]interface{}{
+			"message":     "File uploaded successfully",
+			"rootCID":     finalMetadata.RootCID,
+			"bucketName":  finalMetadata.BucketName,
+			"fileName":    finalMetadata.Name,
+			"size":        finalMetadata.Size,
+			"encodedSize": finalMetadata.EncodedSize,
+			"createdAt":   finalMetadata.CreatedAt,
+			"committedAt": finalMetadata.CommittedAt,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(response)
 	log.Printf("Successfully uploaded file '%s' with Root CID: %s", finalMetadata.Name, finalMetadata.RootCID)
 }
 
 // downloadHandler streams a requested file directly to the client.
 func (s *server) downloadHandler(w http.ResponseWriter, r *http.Request) {
-	bucketName := r.PathValue("bucketName")
-	fileName := r.PathValue("fileName")
+
+	vars := mux.Vars(r)
+	if _, ok := vars["bucketName"]; !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, "bucketName is required")
+		return
+	}
+	if _, ok := vars["fileName"]; !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, "fileName is required")
+		return
+	}
+	bucketName := vars["bucketName"]
+	fileName := vars["fileName"]
 
 	ctx := r.Context()
 
@@ -214,8 +307,18 @@ func (s *server) fileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bucketName := r.PathValue("bucketName")
-	fileName := r.PathValue("fileName")
+	vars := mux.Vars(r)
+	if _, ok := vars["bucketName"]; !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, "bucketName is required")
+		return
+	}
+	if _, ok := vars["fileName"]; !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, "fileName is required")
+		return
+	}
+
+	bucketName := vars["bucketName"]
+	fileName := vars["fileName"]
 	ctx := r.Context()
 
 	log.Printf("Attempting to delete file: %s/%s", bucketName, fileName)
@@ -275,18 +378,24 @@ func MainFunc() {
 	}
 	defer client.Close()
 
-	srv := &server{client: client}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", srv.healthHandler)
-	mux.HandleFunc("/buckets", srv.bucketsHandler)
-	mux.HandleFunc("DELETE /buckets/delete/{bucketName}", srv.deleteBucketHandler)
-	mux.HandleFunc("POST /files/upload/{bucketName}", srv.uploadHandler)
-	mux.HandleFunc("GET /files/download/{bucketName}/{fileName}", srv.downloadHandler)
-	mux.HandleFunc("DELETE /files/delete/{bucketName}/{fileName}", srv.fileDeleteHandler)
-	mux.HandleFunc("GET /files/list/{bucketName}", srv.listFilesHandler)
 
-	log.Println("Server listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	// Set up HTTP server with routes
+	r := mux.NewRouter()
+    srv := &server{client: client}
+
+    r.HandleFunc("/health", srv.healthHandler).Methods("GET")
+    r.HandleFunc("/buckets/{bucketName}", srv.createBucketHandler).Methods("POST")
+    r.HandleFunc("/buckets/{bucketName}", srv.deleteBucketHandler).Methods("DELETE")
+    r.HandleFunc("/buckets/", srv.viewBucketHandler).Methods("GET")
+
+    r.HandleFunc("/buckets/{bucketName}/files", srv.listFilesHandler).Methods("GET")
+    r.HandleFunc("/buckets/{bucketName}/files", srv.uploadHandler).Methods("POST")
+    r.HandleFunc("/buckets/{bucketName}/files/{fileName}", srv.fileInfoHandler).Methods("GET")
+    r.HandleFunc("/buckets/{bucketName}/files/{fileName}/download", srv.downloadHandler).Methods("GET")
+    r.HandleFunc("/buckets/{bucketName}/files/{fileName}", srv.fileDeleteHandler).Methods("DELETE")
+
+    log.Println("Server listening on :8080")
+    log.Fatal(http.ListenAndServe(":8080", r))
 }
 
 func main() {
